@@ -342,31 +342,45 @@ double sigmoidFunction(double x)
 void forwardPass(Data *data, NeuralNetwork* neuralNetwork, int inputIndex)
 {
     // initialize input layer activations to the input
-    for (int i = 0; i < neuralNetwork->layerSizes[0]; i++) {
+    for (int i = 0; i < neuralNetwork->layerSizes[0]; i++) 
+    {
         neuralNetwork->activations[0][i] = data->trainingData[inputIndex][i];
     }
 
-    for (int layer = 1; layer < neuralNetwork->numberLayers - 1; layer++)
+    for (int layer = 0; layer < neuralNetwork->numberLayers - 1; layer++)
     {
         int inputSize = neuralNetwork->layerSizes[layer];
-        int outputSize = neuralNetwork->layerSizes[layer + 1];
+        int outputSize = neuralNetwork->layerSizes[layer+1];
         
-        double *z = (double *)malloc(outputSize * sizeof(double)); // Pre-activation values for the current layer
+        double *z = (double *)malloc(outputSize * sizeof(double)); // pre-activation values for the current layer
 
         // Calculate z = W * a + b
-        for (int j = 0; j < outputSize; j++) {
-            z[j] = neuralNetwork->biases[layer][j]; // Start with the bias
-            for (int i = 0; i < inputSize; i++) {
+        for (int j = 0; j < outputSize; j++) 
+        {
+            z[j] = neuralNetwork->biases[layer][j]; // init to bias
+            for (int i = 0; i < inputSize; i++) 
+            {
                 z[j] += neuralNetwork->weights[layer][i][j] * neuralNetwork->activations[layer][i];
             }
         }
         if (layer == neuralNetwork->numberLayers - 2) {
             // Last layer: use softmax
-            softmax(z, neuralNetwork->activations[layer + 1], outputSize);
+            // softmax(z, neuralNetwork->activations[layer + 1], outputSize);
+            double sum = 0.0;
+            for (int i = 0; i < outputSize; i++) 
+            {
+                neuralNetwork->activations[layer+1][i] = exp(z[i]); 
+                sum += neuralNetwork->activations[layer][i];
+            }
+            for (int i = 0; i < outputSize; i++) 
+            {
+                neuralNetwork->activations[layer+1][i] /= sum; // Normalize to make it a probability distribution
+            }
         } else {
             // Hidden layers: use sigmoid
-            for (int j = 0; j < outputSize; j++) {
-                neuralNetwork->activations[layer + 1][j] = sigmoidFunction(z[j]);
+            for (int i = 0; i < outputSize; i++) 
+            {
+                neuralNetwork->activations[layer+1][i] = sigmoidFunction(z[i]);
             }
         }
 
@@ -407,12 +421,25 @@ int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes
             neuralNetwork->biases[layer][j] = random_value(-0.5, 0.5); // Initialize biases
         }
 
-        // Allocate activations for the current layer
-        neuralNetwork->activations[layer] = (double *)malloc(inputSize * sizeof(double));
-        for (int j = 0; j < inputSize; j++) {
-            neuralNetwork->activations[layer][j] = 0.0; // Initialize biases
-        }
+        // // Allocate activations for the current layer
+        // neuralNetwork->activations[layer] = (double *)malloc(inputSize * sizeof(double));
+        // for (int j = 0; j < inputSize; j++) {
+        //     neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
+        // }
+        // printf("%d\n", inputSize);
+            // Allocate activations for all layers (including input layer)
+
     }
+
+    for (int layer = 0; layer < neuralNetwork->numberLayers; layer++) {
+        neuralNetwork->activations[layer] = (double *)malloc(neuralNetwork->layerSizes[layer] * sizeof(double));
+        for (int j = 0; j < neuralNetwork->layerSizes[layer]; j++) {
+            neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
+        }
+        // printf("%d\n", neuralNetwork->layerSizes[layer]);
+    }
+
+   
 
     return 0;
 }
@@ -444,12 +471,12 @@ void printWeightsAndBiases(NeuralNetwork* neuralNetwork)
     }
 
     for (int layer = 0; layer < neuralNetwork->numberLayers; layer++) {
-        printf("\n\n");
-        printf("Layer %d activations:\n", layer + 1);
+        printf("\n");
+        printf("Layer %d activations:\n", layer);
         for (int j = 0; j < neuralNetwork->layerSizes[layer]; j++) {
             printf("%.2f ", neuralNetwork->activations[layer][j]);
         }
-        printf("\n\n");
+        printf("\n");
     }
 }
 
@@ -473,10 +500,10 @@ int main() {
     int layerSizes[3] = {neuralNetwork.numberInputNodes, 20, neuralNetwork.numberOutputNodes};
     initNeuralNetwork(&data, &neuralNetwork, layerSizes);
 
-    // trainNeuralNetwork(&data, &neuralNetwork);
+    trainNeuralNetwork(&data, &neuralNetwork);
+    printWeightsAndBiases(&neuralNetwork);
+
     // testNeuralNetwork(&data, &neuralNetwork);
-    
-    // printWeightsAndBiases(&neuralNetwork);
 
     // Free allocated memory
     freeMemory(&data, &neuralNetwork);
