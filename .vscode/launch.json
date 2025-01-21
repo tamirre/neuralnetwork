@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "cppvsdbg",
+      "request": "launch",
+      "name": "Debug",
+      "program": "${workspaceFolder}/main.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "console": "integratedTerminal",
+      "cwd": "d:/programming/neuralnetwork",
+      "program": "d:/programming/neuralnetwork/build/Debug/outDebug"
+    }
+  ]
+}
