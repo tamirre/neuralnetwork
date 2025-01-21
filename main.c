@@ -10,11 +10,13 @@ typedef struct NeuralNetwork {
     int numberLayers;
     int numberMaxEpochs;
     int batchSize;
+    double gradientTolerance;
     double learningRate;
     double*** weights;
     double** biases;
     int* layerSizes;
-    double **activations;
+    double** activations;
+    double** deltas;
 } NeuralNetwork;
 
 typedef struct Data {
@@ -122,11 +124,13 @@ void freeMemory(Data* data, NeuralNetwork* neuralNetwork)
         free(neuralNetwork->weights[layer]);
         free(neuralNetwork->biases[layer]);
         free(neuralNetwork->activations[layer]);
+        free(neuralNetwork->deltas[layer]);
     }
 
     free(neuralNetwork->weights);
     free(neuralNetwork->biases);
     free(neuralNetwork->activations);
+    free(neuralNetwork->deltas);
     free(neuralNetwork->layerSizes);
 }
 
@@ -303,7 +307,6 @@ int readMNISTLabelData(Data* data)
         unsigned char label;
         fread_s(&label, sizeof(unsigned char), sizeof(unsigned char), 1, fileStreamTraining);
         data->trainingLabels[i] = (int)label;
-
     }
 
     for (int i = 0; i < data->numberTestLabels; i++)
@@ -391,9 +394,61 @@ void forwardPass(Data *data, NeuralNetwork* neuralNetwork, int inputIndex)
     }
 }
 
-void backPropagation(Data *data, NeuralNetwork* neuralNetwork)
+void labelOutput(int label, int numClasses, double *encodedOutput)
 {
+    for (int i = 0; i < numClasses; i++) {
+        encodedOutput[i] = (i == label) ? 1.0 : 0.0;
+    }
+}
 
+double backPropagation(Data* data, NeuralNetwork* neuralNetwork)
+{
+    int lastLayer = neuralNetwork->numberLayers - 1;
+    double* encodedOutput = (double *)malloc(neuralNetwork->layerSizes[lastLayer] * sizeof(double));
+    // double *z = (double *)malloc(outputSize * sizeof(double)); // pre-activation values for the current layer
+    // compute delta for output layer
+    for(int i = 0; i < neuralNetwork->layerSizes[lastLayer]; i++)
+    {
+        labelOutput(data->trainingLabels[i], neuralNetwork->layerSizes[lastLayer], encodedOutput);
+        neuralNetwork->deltas[lastLayer][i] = neuralNetwork->activations[lastLayer][i] - encodedOutput[i];
+    }
+    free(encodedOutput);
+    // compute delta backwards for every hidden layer through the network
+    for(int layer = neuralNetwork->numberLayers-2; layer > 0; layer--)
+    {
+        int inputSize = neuralNetwork->layerSizes[layer];
+        int outputSize = neuralNetwork->layerSizes[layer + 1];
+
+        for (int j = 0; j < inputSize; j++) {
+            double sum = 0.0;
+            for (int k = 0; k < outputSize; k++) {
+                sum += neuralNetwork->weights[layer][j][k] * neuralNetwork->deltas[layer + 1][k];
+            }
+            // apply the derivative of the activation function
+            neuralNetwork->deltas[layer][j] = sum * neuralNetwork->activations[layer][j] * (1 - neuralNetwork->activations[layer][j]); 
+        }
+    }
+
+    double gradientNorm = 0;
+    for(int layer = neuralNetwork->numberLayers-2; layer > 0; layer--)
+    {
+        int inputSize = neuralNetwork->layerSizes[layer];
+        int outputSize = neuralNetwork->layerSizes[layer + 1];
+
+        for (int j = 0; j < outputSize; j++) {
+            // update biases
+            neuralNetwork->biases[layer][j] -= neuralNetwork->learningRate * neuralNetwork->deltas[layer + 1][j];
+            // neuralNetwork->deltas[layer + 1][j] * neuralNetwork->deltas[layer + 1][j];
+            // gradientNorm += neuralNetwork->biases[layer][j] * neuralNetwork->biases[layer][j];
+            for (int i = 0; i < inputSize; i++) {
+                // update weights
+                double grad = neuralNetwork->deltas[layer + 1][j] * neuralNetwork->activations[layer][i];
+                neuralNetwork->weights[layer][i][j] -= neuralNetwork->learningRate * grad;
+                gradientNorm += grad * grad;
+            }
+        }
+    }
+    return sqrt(gradientNorm);
 }
 
 int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
@@ -408,6 +463,7 @@ int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
     neuralNetwork->weights = (double ***)malloc((neuralNetwork->numberLayers - 1) * sizeof(double **));
     neuralNetwork->biases = (double **)malloc((neuralNetwork->numberLayers - 1) * sizeof(double *));
     neuralNetwork->activations = (double **)malloc((neuralNetwork->numberLayers - 1) * sizeof(double *));
+    neuralNetwork->deltas = (double **)malloc((neuralNetwork->numberLayers - 1) * sizeof(double *));
 
     for (int layer = 0; layer < neuralNetwork->numberLayers - 1; layer++) 
     {
@@ -432,8 +488,10 @@ int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
 
     for (int layer = 0; layer < neuralNetwork->numberLayers; layer++) {
         neuralNetwork->activations[layer] = (double *)malloc(neuralNetwork->layerSizes[layer] * sizeof(double));
+        neuralNetwork->deltas[layer] = (double *)malloc(neuralNetwork->layerSizes[layer] * sizeof(double));
         for (int j = 0; j < neuralNetwork->layerSizes[layer]; j++) {
             neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
+            neuralNetwork->deltas[layer][j] = 0.0; // Initialize activations
         }
     }
 
@@ -468,10 +526,13 @@ void printWeightsAndBiases(NeuralNetwork* neuralNetwork)
     }
 }
 
-
 void trainNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
 {
-    for (int epoch = 0; epoch < neuralNetwork->numberMaxEpochs; epoch++)
+    int epoch = 0;
+    // double gradient = 0;
+    double gradientNorm = 9999;
+    // for (int epoch = 0; epoch < neuralNetwork->numberMaxEpochs; epoch++)
+    while (epoch < neuralNetwork->numberMaxEpochs && gradientNorm > neuralNetwork->gradientTolerance)
     {
         int batchCounter = 0;
         printf("========= EPOCH %d =========\n", epoch);
@@ -482,21 +543,43 @@ void trainNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
                     imgIndex++)
             {
                 forwardPass(data, neuralNetwork, imgIndex);
+                gradientNorm = backPropagation(data, neuralNetwork) / data->numberTrainingData;
+                // printf("gradient: %.4e\n", gradientNorm);
             }
-            
-            backPropagation(data, neuralNetwork);
             batchCounter++;
-            // printWeightsAndBiases(neuralNetwork);
         }
+        epoch++;
     }
     printf("==== TRAINING FINISHED ====\n");
     // printWeightsAndBiases(neuralNetwork);
 }
 
-// void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
-// {
+void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork) {
+    int correctPredictions = 0;
+    for (int i = 0; i < data->numberTestData; i++) {
+        // Perform a forward pass on the test data
+        forwardPass(data, neuralNetwork, i);
 
-// }
+        // Get the predicted label (index of the highest activation)
+        int predictedLabel = -1;
+        double maxActivation = -1.0;
+        for (int j = 0; j < neuralNetwork->layerSizes[neuralNetwork->numberLayers - 1]; j++) {
+            if (neuralNetwork->activations[neuralNetwork->numberLayers - 1][j] > maxActivation) {
+                maxActivation = neuralNetwork->activations[neuralNetwork->numberLayers - 1][j];
+                predictedLabel = j;
+            }
+        }
+
+        // Check if the prediction is correct
+        if (predictedLabel == data->testLabels[i]) {
+            correctPredictions++;
+        }
+    }
+
+    // Calculate and print accuracy
+    double accuracy = (double)correctPredictions / data->numberTestData * 100.0;
+    printf("Test accuracy: %.2f%%\n", accuracy);
+}
 
 
 int main() {
@@ -511,22 +594,22 @@ int main() {
         .numberOutputNodes = 10,
         .numberLayers = 3,
         .numberMaxEpochs = 3,
-        .learningRate = 0.5,
+        .learningRate = 0.9,
+        .gradientTolerance = 1e-6,
     };
 
-    // Read training & test image data and labels, exit on failure
+    // Read training & test image data anPd labels, exit on failure
     if(readMNISTImageData(&data, &neuralNetwork)) return 1;
     if(readMNISTLabelData(&data)) return 1;
     printf("Reading image and label data complete!\n");
 
-    neuralNetwork.batchSize = data.numberTrainingData / 100;
+    neuralNetwork.batchSize = 1; // data.numberTrainingData / 100;
 
     int layerSizes[3] = {neuralNetwork.numberInputNodes, 20, neuralNetwork.numberOutputNodes};
     initNeuralNetwork(&neuralNetwork, layerSizes);
     trainNeuralNetwork(&data, &neuralNetwork);
 
-
-    // testNeuralNetwork(&data, &neuralNetwork);
+    testNeuralNetwork(&data, &neuralNetwork);
 
     // Free allocated memory
     freeMemory(&data, &neuralNetwork);
