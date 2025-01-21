@@ -8,6 +8,9 @@ typedef struct NeuralNetwork {
     int numberInputNodes;
     int numberOutputNodes;
     int numberLayers;
+    int numberMaxEpochs;
+    int batchSize;
+    double learningRate;
     double*** weights;
     double** biases;
     int* layerSizes;
@@ -156,7 +159,7 @@ int readMNISTImageData(Data* data, NeuralNetwork* neuralNetwork)
     // The 4-th byte codes the number of dimensions of the vector/matrix: 1 for vectors, 2 for matrices....
     // The sizes in each dimension are 4-byte integers (MSB first, high endian, like in most non-Intel processors).
 
-    const int32_t magicNumberBigEndianTraining = intBigEndianToLittleEndian(magicNumber);
+    // const int32_t magicNumberBigEndianTraining = intBigEndianToLittleEndian(magicNumber);
     const int32_t numberImagesBigEndianTraining = intBigEndianToLittleEndian(numberImages);
     const int32_t numberRowsBigEndianTraining = intBigEndianToLittleEndian(numberRows);
     const int32_t numberColsBigEndianTraining = intBigEndianToLittleEndian(numberCols);
@@ -205,7 +208,7 @@ int readMNISTImageData(Data* data, NeuralNetwork* neuralNetwork)
     fread_s(&numberRows, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTest);
     fread_s(&numberCols, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTest);
 
-    const int32_t magicNumberBigEndianTest = intBigEndianToLittleEndian(magicNumber);
+    // const int32_t magicNumberBigEndianTest = intBigEndianToLittleEndian(magicNumber);
     const int32_t numberImagesBigEndianTest = intBigEndianToLittleEndian(numberImages);
 
     data->numberTestData = numberImagesBigEndianTest;
@@ -262,7 +265,7 @@ int readMNISTLabelData(Data* data)
     fread_s(&magicNumber, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTraining);
     fread_s(&numberLabels, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTraining);
 
-    const int32_t magicNumberBigEndian = intBigEndianToLittleEndian(magicNumber);
+    // const int32_t magicNumberBigEndian = intBigEndianToLittleEndian(magicNumber);
     const int32_t numberLabelsBigEndian = intBigEndianToLittleEndian(numberLabels);
     
     data->numberTrainingLabels = numberLabelsBigEndian;
@@ -284,7 +287,7 @@ int readMNISTLabelData(Data* data)
     fread_s(&magicNumber, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTest);
     fread_s(&numberLabels, sizeof(int32_t), sizeof(int32_t), 1, fileStreamTest);
 
-    const int32_t magicNumberBigEndianTraining = intBigEndianToLittleEndian(magicNumber);
+    // const int32_t magicNumberBigEndianTraining = intBigEndianToLittleEndian(magicNumber);
     const int32_t numberLabelsBigEndianTraining = intBigEndianToLittleEndian(numberLabels);
     
     data->numberTestLabels = numberLabelsBigEndianTraining;
@@ -388,7 +391,12 @@ void forwardPass(Data *data, NeuralNetwork* neuralNetwork, int inputIndex)
     }
 }
 
-int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes)
+void backPropagation(Data *data, NeuralNetwork* neuralNetwork)
+{
+
+}
+
+int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
 {
     neuralNetwork->layerSizes = (int *)malloc(neuralNetwork->numberLayers * sizeof(int));
 
@@ -420,15 +428,6 @@ int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes
         for (int j = 0; j < outputSize; j++) {
             neuralNetwork->biases[layer][j] = random_value(-0.5, 0.5); // Initialize biases
         }
-
-        // // Allocate activations for the current layer
-        // neuralNetwork->activations[layer] = (double *)malloc(inputSize * sizeof(double));
-        // for (int j = 0; j < inputSize; j++) {
-        //     neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
-        // }
-        // printf("%d\n", inputSize);
-            // Allocate activations for all layers (including input layer)
-
     }
 
     for (int layer = 0; layer < neuralNetwork->numberLayers; layer++) {
@@ -436,22 +435,11 @@ int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes
         for (int j = 0; j < neuralNetwork->layerSizes[layer]; j++) {
             neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
         }
-        // printf("%d\n", neuralNetwork->layerSizes[layer]);
     }
 
    
 
     return 0;
-}
-
-void trainNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
-{
-    forwardPass(data, neuralNetwork, 0);
-}
-
-void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
-{
-
 }
 
 void printWeightsAndBiases(NeuralNetwork* neuralNetwork)
@@ -480,28 +468,63 @@ void printWeightsAndBiases(NeuralNetwork* neuralNetwork)
     }
 }
 
+
+void trainNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
+{
+    for (int epoch = 0; epoch < neuralNetwork->numberMaxEpochs; epoch++)
+    {
+        int batchCounter = 0;
+        printf("========= EPOCH %d =========\n", epoch);
+        while (batchCounter < data->numberTrainingData / neuralNetwork->batchSize)
+        {
+            for (int imgIndex =  batchCounter * neuralNetwork->batchSize; 
+                    imgIndex < (batchCounter+1) * neuralNetwork->batchSize; 
+                    imgIndex++)
+            {
+                forwardPass(data, neuralNetwork, imgIndex);
+            }
+            
+            backPropagation(data, neuralNetwork);
+            batchCounter++;
+            // printWeightsAndBiases(neuralNetwork);
+        }
+    }
+    printf("==== TRAINING FINISHED ====\n");
+    // printWeightsAndBiases(neuralNetwork);
+}
+
+// void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
+// {
+
+// }
+
+
 int main() {
 
     // Initialize random seed
-    srand(time(NULL));
+    unsigned int seedTime = (unsigned int)time(NULL);
+    srand(seedTime);
 
-    // Initialize data
+    // Initialize data and neural network
     Data data;
     NeuralNetwork neuralNetwork = {
         .numberOutputNodes = 10,
         .numberLayers = 3,
+        .numberMaxEpochs = 3,
+        .learningRate = 0.5,
     };
-    
+
     // Read training & test image data and labels, exit on failure
     if(readMNISTImageData(&data, &neuralNetwork)) return 1;
     if(readMNISTLabelData(&data)) return 1;
     printf("Reading image and label data complete!\n");
 
-    int layerSizes[3] = {neuralNetwork.numberInputNodes, 20, neuralNetwork.numberOutputNodes};
-    initNeuralNetwork(&data, &neuralNetwork, layerSizes);
+    neuralNetwork.batchSize = data.numberTrainingData / 100;
 
+    int layerSizes[3] = {neuralNetwork.numberInputNodes, 20, neuralNetwork.numberOutputNodes};
+    initNeuralNetwork(&neuralNetwork, layerSizes);
     trainNeuralNetwork(&data, &neuralNetwork);
-    printWeightsAndBiases(&neuralNetwork);
+
 
     // testNeuralNetwork(&data, &neuralNetwork);
 
