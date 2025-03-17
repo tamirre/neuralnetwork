@@ -87,7 +87,6 @@ void printSampleImages(Data* data, NeuralNetwork* neuralNetwork)
     }
 }
 
-
 void printSampleLabels(Data* data)
 {
     for (int i = 0; i < 10; i++)
@@ -201,11 +200,10 @@ int readMNISTImageData(Data* data, NeuralNetwork* neuralNetwork)
         {
             unsigned char pixel;
             fread_s(&pixel, sizeof(unsigned char), sizeof(unsigned char), 1, fileStreamTraining);
-            data->trainingData[i][j] = (double)pixel / 255.0; // normalize to values in [0,1]
+            data->trainingData[i][j] = (double)pixel / 255.0; // normalize to values to be in [0,1]
         }
     }
 
-    // data->trainingData = trainingData;
     if ((error = fopen_s(&fileStreamTest, "./mnist_test_images.bin", "rb")) != 0 )
     {
         printf("ERROR: could not read file: ./mnist_test_images.bin");
@@ -250,14 +248,10 @@ int readMNISTImageData(Data* data, NeuralNetwork* neuralNetwork)
         }
     }
     
-    // print some training samples
-    // printSampleImages(data, neuralNetwork);
-
     fclose(fileStreamTraining);
     fclose(fileStreamTest);
     return 0;
 }
-
 
 int readMNISTLabelData(Data* data)
 {
@@ -284,8 +278,6 @@ int readMNISTLabelData(Data* data)
         perror("Failed to allocate memory for testData!");
         return 1;
     }
-
-    // printf("%d\n", data->numberTrainingLabels);
 
     if ((error = fopen_s(&fileStreamTest, "./mnist_test_labels.bin", "rb")) != 0 )
     {
@@ -320,9 +312,6 @@ int readMNISTLabelData(Data* data)
         fread_s(&label, sizeof(unsigned char), sizeof(unsigned char), 1, fileStreamTest);
         data->testLabels[i] = (int)label;
     }
-
-    // print some training samples
-    // printSampleLabels(data);
     
     fclose(fileStreamTraining);
     fclose(fileStreamTest);
@@ -454,7 +443,6 @@ double backPropagation(Data* data, NeuralNetwork* neuralNetwork, int imgIndex)
     // Compute delta for output layer
     for(int i = 0; i < neuralNetwork->layerSizes[lastLayer]; i++)
     {
-        // neuralNetwork->deltas[lastLayer][i] = costFunctionDerivative(neuralNetwork->activations[lastLayer][i], encodedOutput[i]);
         neuralNetwork->deltas[lastLayer][i] = costFunctionDerivative(neuralNetwork->activations[lastLayer][i], encodedOutput[i]) 
                                             * sigmoidPrime(neuralNetwork->z[lastLayer][i]);
     }
@@ -494,8 +482,7 @@ double backPropagation(Data* data, NeuralNetwork* neuralNetwork, int imgIndex)
     return gradientNorm;
 }
 
-int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes)
-// int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
+int initNeuralNetwork(NeuralNetwork* neuralNetwork,  int *layerSizes)
 {
     neuralNetwork->layerSizes = (int *)malloc(neuralNetwork->numberLayers * sizeof(int));
 
@@ -520,7 +507,6 @@ int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes
         for (int i = 0; i < inputSize; i++) {
             neuralNetwork->weights[layer][i] = (double *)malloc(outputSize * sizeof(double));
             for (int j = 0; j < outputSize; j++) {
-                // neuralNetwork->weights[layer][i][j] = random_value(-0.5, 0.5); // Initialize weights
                 neuralNetwork->weights[layer][i][j] = random_value(- sqrt(6.0 / inputSize), sqrt(6.0 / inputSize)); // Xavier initialization
             }
         }
@@ -532,7 +518,6 @@ int initNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork,  int *layerSizes
         neuralNetwork->deltas[layer] = (double *)malloc(neuralNetwork->layerSizes[layer] * sizeof(double));
         neuralNetwork->z[layer] = (double *)malloc(neuralNetwork->layerSizes[layer] * sizeof(double));
         for (int j = 0; j < neuralNetwork->layerSizes[layer]; j++) {
-            // neuralNetwork->biases[layer][j] = random_value(-0.5, 0.5);
             neuralNetwork->biases[layer][j] = random_value(- sqrt(6.0 / neuralNetwork->layerSizes[layer]), sqrt(6.0 / neuralNetwork->layerSizes[layer])); // Xavier initialization 
             neuralNetwork->activations[layer][j] = 0.0; // Initialize activations
             neuralNetwork->deltas[layer][j] = 0.0; // Initialize deltas
@@ -547,7 +532,6 @@ void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork) {
     for (int i = 0; i < data->numberTestData; i++) {
         // Perform a forward pass on the test data
         forwardPass(data->testData, neuralNetwork, i);
-        // printWeightsAndBiases(neuralNetwork);
         // Get the predicted label (index of the highest activation)
         int predictedLabel = -1;
         double maxActivation = -1.0;
@@ -572,36 +556,21 @@ void testNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork) {
 void trainNeuralNetwork(Data* data, NeuralNetwork* neuralNetwork)
 {
     int epoch = 0;
-    // double gradient = 0;
-    // double gradientNorm = 9999;
-    // for (int epoch = 0; epoch < neuralNetwork->numberMaxEpochs; epoch++)
     while (epoch < neuralNetwork->numberMaxEpochs)
     {
         double gradientNorm = 0;
-        // int batchCounter = 0;
-        printf("========= EPOCH %d =========\n", epoch);
-        // while (batchCounter < data->numberTrainingData / neuralNetwork->batchSize)
-        // while (batchCounter < data->numberTrainingData / neuralNetwork->batchSize)
-        // {
-            // for (int imgIndex =  batchCounter * neuralNetwork->batchSize; 
-            //         imgIndex < (batchCounter+1) * neuralNetwork->batchSize; 
-            //         imgIndex++)
+        printf("========= EPOCH %d =========\n", epoch);    
         for (int imgIndex = 0; imgIndex < data->numberTrainingData; imgIndex++)
         {
             forwardPass(data->trainingData, neuralNetwork, imgIndex);
-            // printWeightsAndBiases(neuralNetwork);
             gradientNorm += backPropagation(data, neuralNetwork, imgIndex); 
         }
-        //     batchCounter++;
-        // }
-        // testNeuralNetwork(data, neuralNetwork); 
         gradientNorm = sqrt(gradientNorm) / data->numberTrainingData;
         printf("gradient: %.4e\n", gradientNorm);
-        // if(gradientNorm < neuralNetwork->gradientTolerance) break;
+        if(gradientNorm < neuralNetwork->gradientTolerance) break;
         epoch++;
     }
     printf("==== TRAINING FINISHED ====\n");
-    // printWeightsAndBiases(neuralNetwork);
 }
 
 
@@ -612,14 +581,14 @@ int main() {
     // Initialize random seed
     // unsigned int seedTime = (unsigned int)time(NULL);
     // srand(seedTime);
-    srand(42);
+    srand(42); // Deterministic seeding
 
     // Initialize data and neural network
     Data data;
     NeuralNetwork neuralNetwork = {
         .numberOutputNodes = 10,
         .numberLayers = 3,
-        .numberMaxEpochs = 30,
+        .numberMaxEpochs = 3,
         .learningRate = 0.1,
         .gradientTolerance = 1e-6,
     };
@@ -632,12 +601,8 @@ int main() {
     neuralNetwork.batchSize = 1; // data.numberTrainingData / 100;
 
     int layerSizes[3] = {neuralNetwork.numberInputNodes, 100, neuralNetwork.numberOutputNodes};
-    // initNeuralNetwork(&neuralNetwork, layerSizes);
-    initNeuralNetwork(&data, &neuralNetwork, layerSizes);
-    
-    // printWeightsAndBiases(&neuralNetwork);
+    initNeuralNetwork(&neuralNetwork, layerSizes);
     trainNeuralNetwork(&data, &neuralNetwork);
-
     testNeuralNetwork(&data, &neuralNetwork);
 
     // Free allocated memory
